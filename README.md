@@ -47,6 +47,23 @@ pnpm run build
 - `pnpm run dev` - Build in development mode with watch
 - `pnpm run build` - Build for production
 
+## Releases
+
+To create a new release:
+
+1. Create and push a new tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. The GitHub Action will automatically:
+   - Build the extension
+   - Create a zip file ready for Chrome Web Store upload
+   - Publish a GitHub release with the zip file attached
+
+3. Download the `itp-calendar-sync-extension.zip` from the release page for Chrome Web Store submission
+
 ## Features
 
 - ✅ Extracts RSVPed events from ITP Camp dashboard

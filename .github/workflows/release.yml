@@ -9,6 +9,9 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,7 +42,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: itp-calendar-sync-extension.zip
-          name: Release ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           body: |
             ## Chrome Extension Release ${{ github.ref_name }}
 
@@ -54,5 +57,3 @@ jobs:
             - See commit history for detailed changes
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
