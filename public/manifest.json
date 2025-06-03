@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Sync RSVPed events from ITP Camp dashboard to Google Calendar",
 
-  "permissions": ["storage", "activeTab", "identity", "scripting", "notifications"],
+  "permissions": ["storage", "activeTab", "identity", "scripting"],
 
   "host_permissions": ["https://itp.nyu.edu/*", "https://www.googleapis.com/*"],
 

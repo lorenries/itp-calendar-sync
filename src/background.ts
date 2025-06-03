@@ -21,7 +21,20 @@ class CalendarSync {
 
   async saveStoredEvent(event: StoredEvent): Promise<void> {
     const storedEvents = await this.getStoredEvents();
-    storedEvents.push(event);
+
+    // Check if event with same itpEventId already exists
+    const existingIndex = storedEvents.findIndex(
+      (e) => e.itpEventId === event.itpEventId,
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing event instead of adding duplicate
+      storedEvents[existingIndex] = event;
+    } else {
+      // Add new event
+      storedEvents.push(event);
+    }
+
     await chrome.storage.local.set({ syncedEvents: storedEvents });
   }
 
@@ -188,8 +201,20 @@ class CalendarSync {
         },
       );
 
+      if (response.status === 410) {
+        // Event already deleted or doesn't exist - treat as success
+        console.log(`Event ${calendarEventId} already deleted (410 Gone)`);
+        return true;
+      }
+
+      if (response.status === 404) {
+        // Event not found - treat as success since it's already gone
+        console.log(`Event ${calendarEventId} not found (404)`);
+        return true;
+      }
+
       if (!response.ok) {
-        throw new Error(`Failed to delete event: ${response.statusText}`);
+        throw new Error(`Failed to delete event: ${response.status} ${response.statusText}`);
       }
 
       return true;
@@ -364,26 +389,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CREATE_SINGLE_EVENT") {
     calendarSync
       .syncSingleEvent(message.event)
-      .then(async (result) => {
+      .then((result) => {
         console.log("Single event sync result:", result);
-        // Show notification to user
-        await chrome.notifications?.create({
-          type: "basic",
-          iconUrl: "images/icon_nyan.png",
-          title: "ITP Camp Calendar Sync",
-          message: result.success
-            ? `Added "${message.event.title}" to your calendar!`
-            : `Failed to add event: ${result.errors[0] || "Unknown error"}`,
+        // Send result back to content script for inline notification
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: "SHOW_INLINE_NOTIFICATION",
+              success: result.success,
+              message: result.success
+                ? `✅ Added "${message.event.title}" to your calendar!`
+                : `❌ Failed to add event: ${result.errors[0] || "Unknown error"}`,
+            });
+          }
         });
         sendResponse(result);
       })
-      .catch(async (error) => {
+      .catch((error) => {
         console.error("Single event sync failed:", error);
-        await chrome.notifications?.create({
-          type: "basic",
-          iconUrl: "images/icon_nyan.png",
-          title: "ITP Camp Calendar Sync",
-          message: `Failed to add event: ${error.message}`,
+        // Send error back to content script for inline notification
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: "SHOW_INLINE_NOTIFICATION",
+              success: false,
+              message: `❌ Failed to add event: ${error.message}`,
+            });
+          }
         });
         sendResponse({
           success: false,
@@ -400,24 +432,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .deleteSingleEvent(message.event)
       .then((result) => {
         console.log("Single event delete result:", result);
-        // Show notification to user
-        chrome.notifications?.create({
-          type: "basic",
-          iconUrl: "images/icon-48.png",
-          title: "ITP Camp Calendar Sync",
-          message: result.success
-            ? `Removed "${message.event.title}" from your calendar!`
-            : `Failed to remove event: ${result.errors[0] || "Unknown error"}`,
+        // Send result back to content script for inline notification
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: "SHOW_INLINE_NOTIFICATION",
+              success: result.success,
+              message: result.success
+                ? `🗑️ Removed "${message.event.title}" from your calendar!`
+                : `❌ Failed to remove event: ${result.errors[0] || "Unknown error"}`,
+            });
+          }
         });
         sendResponse(result);
       })
       .catch((error) => {
         console.error("Single event delete failed:", error);
-        chrome.notifications?.create({
-          type: "basic",
-          iconUrl: "images/icon-48.png",
-          title: "ITP Camp Calendar Sync",
-          message: `Failed to remove event: ${error.message}`,
+        // Send error back to content script for inline notification
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: "SHOW_INLINE_NOTIFICATION",
+              success: false,
+              message: `❌ Failed to remove event: ${error.message}`,
+            });
+          }
         });
         sendResponse({
           success: false,
