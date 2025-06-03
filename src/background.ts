@@ -30,7 +30,7 @@ class CalendarSync {
     timeString: string,
   ): { start: string; end: string } {
     // Parse date in Eastern timezone to avoid timezone shifting
-    const dateParts = dateString.split('-');
+    const dateParts = dateString.split("-");
     const year = parseInt(dateParts[0]);
     const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
     const day = parseInt(dateParts[2]);
@@ -51,7 +51,8 @@ class CalendarSync {
       };
     }
 
-    const [, startHour, startMin = "0", endHour, endMin = "0", period] = timeMatch;
+    const [, startHour, startMin = "0", endHour, endMin = "0", period] =
+      timeMatch;
 
     let startHour24 = parseInt(startHour);
     let endHour24 = parseInt(endHour);
@@ -62,7 +63,7 @@ class CalendarSync {
       if (endHour24 !== 12) {
         endHour24 += 12;
       }
-      
+
       // Start time logic for PM period - assume both are PM unless crossing noon
       if (startHour24 !== 12) {
         startHour24 += 12;
@@ -73,7 +74,14 @@ class CalendarSync {
       if (endHour24 === 12) endHour24 = 0;
     }
 
-    const startDate = new Date(year, month, day, startHour24, parseInt(startMin), 0);
+    const startDate = new Date(
+      year,
+      month,
+      day,
+      startHour24,
+      parseInt(startMin),
+      0,
+    );
     const endDate = new Date(year, month, day, endHour24, parseInt(endMin), 0);
 
     return {
@@ -85,16 +93,16 @@ class CalendarSync {
   toEasternISO(date: Date): string {
     // Create Eastern timezone ISO string
     const easternOffset = -4; // EDT is UTC-4 in summer, UTC-5 in winter
-    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-    const easternTime = new Date(utc + (easternOffset * 3600000));
-    
+    const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+    const easternTime = new Date(utc + easternOffset * 3600000);
+
     // Format as ISO string with timezone
     const year = easternTime.getFullYear();
-    const month = String(easternTime.getMonth() + 1).padStart(2, '0');
-    const day = String(easternTime.getDate()).padStart(2, '0');
-    const hours = String(easternTime.getHours()).padStart(2, '0');
-    const minutes = String(easternTime.getMinutes()).padStart(2, '0');
-    
+    const month = String(easternTime.getMonth() + 1).padStart(2, "0");
+    const day = String(easternTime.getDate()).padStart(2, "0");
+    const hours = String(easternTime.getHours()).padStart(2, "0");
+    const minutes = String(easternTime.getMinutes()).padStart(2, "0");
+
     return `${year}-${month}-${day}T${hours}:${minutes}:00-04:00`;
   }
 
@@ -164,8 +172,125 @@ class CalendarSync {
     }
   }
 
+  async deleteCalendarEvent(calendarEventId: string): Promise<boolean> {
+    if (!this.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${calendarEventId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete event: ${response.statusText}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      throw error;
+    }
+  }
+
+  async removeStoredEvent(eventId: string): Promise<void> {
+    const storedEvents = await this.getStoredEvents();
+    const filteredEvents = storedEvents.filter((e) => e.itpEventId !== eventId);
+    await chrome.storage.local.set({ syncedEvents: filteredEvents });
+  }
+
   generateEventId(event: ITPEvent): string {
     return `itp-${event.date}-${event.title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`;
+  }
+
+  async syncSingleEvent(event: ITPEvent): Promise<SyncResult> {
+    const result: SyncResult = {
+      success: false,
+      eventsFound: 1,
+      eventsCreated: 0,
+      errors: [],
+    };
+
+    if (!(await this.authenticate())) {
+      result.errors.push("Authentication failed");
+      return result;
+    }
+
+    const eventId = this.generateEventId(event);
+    const storedEvents = await this.getStoredEvents();
+    const existingEvent = storedEvents.find((e) => e.itpEventId === eventId);
+
+    if (existingEvent) {
+      result.errors.push("Event already exists in calendar");
+      return result;
+    }
+
+    try {
+      const calendarEvent = this.convertToCalendarEvent(event);
+      const calendarEventId = await this.createCalendarEvent(calendarEvent);
+
+      if (calendarEventId) {
+        await this.saveStoredEvent({
+          itpEventId: eventId,
+          calendarEventId,
+          lastSynced: new Date().toISOString(),
+        });
+        result.eventsCreated = 1;
+        result.success = true;
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      result.errors.push(`Failed to sync "${event.title}": ${errorMessage}`);
+    }
+
+    return result;
+  }
+
+  async deleteSingleEvent(event: ITPEvent): Promise<SyncResult> {
+    const result: SyncResult = {
+      success: false,
+      eventsFound: 1,
+      eventsCreated: 0,
+      errors: [],
+    };
+
+    if (!(await this.authenticate())) {
+      result.errors.push("Authentication failed");
+      return result;
+    }
+
+    const eventId = this.generateEventId(event);
+    const storedEvents = await this.getStoredEvents();
+    const existingEvent = storedEvents.find((e) => e.itpEventId === eventId);
+
+    if (!existingEvent) {
+      result.errors.push("Event not found in calendar");
+      return result;
+    }
+
+    try {
+      const deleted = await this.deleteCalendarEvent(
+        existingEvent.calendarEventId,
+      );
+
+      if (deleted) {
+        await this.removeStoredEvent(eventId);
+        result.success = true;
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      result.errors.push(`Failed to delete "${event.title}": ${errorMessage}`);
+    }
+
+    return result;
   }
 
   async syncEvents(events: ITPEvent[]): Promise<SyncResult> {
@@ -188,6 +313,9 @@ class CalendarSync {
       const eventId = this.generateEventId(event);
 
       if (existingEventIds.has(eventId)) {
+        console.log(
+          `Event "${event.title}" already exists in calendar, skipping.`,
+        );
         continue;
       }
 
@@ -230,6 +358,74 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           errors: [error.message],
         }),
       );
+    return true;
+  }
+
+  if (message.type === "CREATE_SINGLE_EVENT") {
+    calendarSync
+      .syncSingleEvent(message.event)
+      .then(async (result) => {
+        console.log("Single event sync result:", result);
+        // Show notification to user
+        await chrome.notifications?.create({
+          type: "basic",
+          iconUrl: "images/icon_nyan.png",
+          title: "ITP Camp Calendar Sync",
+          message: result.success
+            ? `Added "${message.event.title}" to your calendar!`
+            : `Failed to add event: ${result.errors[0] || "Unknown error"}`,
+        });
+        sendResponse(result);
+      })
+      .catch(async (error) => {
+        console.error("Single event sync failed:", error);
+        await chrome.notifications?.create({
+          type: "basic",
+          iconUrl: "images/icon_nyan.png",
+          title: "ITP Camp Calendar Sync",
+          message: `Failed to add event: ${error.message}`,
+        });
+        sendResponse({
+          success: false,
+          eventsFound: 1,
+          eventsCreated: 0,
+          errors: [error.message],
+        });
+      });
+    return true;
+  }
+
+  if (message.type === "DELETE_SINGLE_EVENT") {
+    calendarSync
+      .deleteSingleEvent(message.event)
+      .then((result) => {
+        console.log("Single event delete result:", result);
+        // Show notification to user
+        chrome.notifications?.create({
+          type: "basic",
+          iconUrl: "images/icon-48.png",
+          title: "ITP Camp Calendar Sync",
+          message: result.success
+            ? `Removed "${message.event.title}" from your calendar!`
+            : `Failed to remove event: ${result.errors[0] || "Unknown error"}`,
+        });
+        sendResponse(result);
+      })
+      .catch((error) => {
+        console.error("Single event delete failed:", error);
+        chrome.notifications?.create({
+          type: "basic",
+          iconUrl: "images/icon-48.png",
+          title: "ITP Camp Calendar Sync",
+          message: `Failed to remove event: ${error.message}`,
+        });
+        sendResponse({
+          success: false,
+          eventsFound: 1,
+          eventsCreated: 0,
+          errors: [error.message],
+        });
+      });
     return true;
   }
 

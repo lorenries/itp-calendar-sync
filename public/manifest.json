@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Sync RSVPed events from ITP Camp dashboard to Google Calendar",
 
-  "permissions": ["storage", "activeTab", "identity", "scripting"],
+  "permissions": ["storage", "activeTab", "identity", "scripting", "notifications"],
 
   "host_permissions": ["https://itp.nyu.edu/*", "https://www.googleapis.com/*"],
 
@@ -12,6 +12,10 @@
     {
       "matches": ["https://itp.nyu.edu/camp/2025/dashboard"],
       "js": ["content.js"]
+    },
+    {
+      "matches": ["https://itp.nyu.edu/camp/2025/session/*"],
+      "js": ["session-content.js"]
     }
   ],
 
