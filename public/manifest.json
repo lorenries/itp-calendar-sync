@@ -32,6 +32,13 @@
     "client_id": "477189148318-iuinneelm0het1uo29aul95gdvs48h25.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/calendar"]
   },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*"],
+      "matches": ["https://itp.nyu.edu/*"]
+    }
+  ],
 
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnMh8K9RUcfkLJoSu/g5F0huB+yNZHoHyvXvhqHm7yYJvYWLnkNth1fY7I/9yWfQjpQSep/Hmxac0qga7hvpD/z6FpwFDXikkZGUnNScnB0pJn5HdvOo2jNgf+y+pu6lJVJ3jmP8Z1OMZCRBMJ0SKkEFAzxjtYZI8d+kcTdow9UfSbeutsuUVGjbzRp7eN0z9x9w1Us1eyNVarIWsWhiZzcMXD0B+rQLJtslxu1Ewm5dXrpuPYTppAMaiaJduDIXiILzkKEev+8ANQJd0250RNtkwJtkDbRmlmEH0GHZRHu6Zxs+RR11lN/H8h26WZyjxHTobFZL8CFiSOv2zvG/vhwIDAQAB"
 }
