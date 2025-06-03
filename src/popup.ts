@@ -41,8 +41,48 @@ class PopupController {
       });
       this.elements.eventsSynced.textContent =
         response.syncedEventsCount.toString();
+
+      // Also try to get current events from active tab
+      await this.loadCurrentEvents();
     } catch (error) {
       console.error("Failed to load sync status:", error);
+    }
+  }
+
+  async loadCurrentEvents() {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      // Only try to load events if we're on the dashboard
+      if (tab.url?.includes("itp.nyu.edu/camp/2025/dashboard")) {
+        const events = await this.getEventsFromActiveTab();
+        this.elements.eventsFound.textContent = events.length.toString();
+
+        // Calculate unsynced events
+        const syncResponse = await chrome.runtime.sendMessage({
+          type: "GET_SYNC_STATUS",
+        });
+        const syncedEvents = syncResponse.syncedEventsCount || 0;
+        const unsyncedCount = Math.max(0, events.length - syncedEvents);
+
+        // Update button text to show unsynced count
+        if (unsyncedCount > 0) {
+          this.elements.syncButton.textContent = `Sync ${unsyncedCount} New Events`;
+        } else if (events.length > 0) {
+          this.elements.syncButton.textContent = 'All Events Synced';
+        } else {
+          this.elements.syncButton.textContent = "Sync Events";
+        }
+      } else {
+        this.elements.eventsFound.textContent = "?";
+        this.elements.syncButton.textContent = "Visit Dashboard First";
+      }
+    } catch (error) {
+      console.error("Failed to load current events:", error);
+      this.elements.eventsFound.textContent = "?";
     }
   }
 
@@ -112,11 +152,11 @@ class PopupController {
     });
 
     if (!tab.id) {
-      throw new Error("No active tab found");
+      return [];
     }
 
     if (!tab.url?.includes("itp.nyu.edu/camp/2025/dashboard")) {
-      throw new Error("Please navigate to the ITP Camp dashboard first");
+      return [];
     }
 
     try {
@@ -125,22 +165,50 @@ class PopupController {
       });
       return response.events || [];
     } catch (error) {
-      // If content script isn't loaded, try to inject it
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content.js"],
-      });
+      try {
+        // If content script isn't loaded, try to inject it
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content.js"],
+        });
 
-      // Wait a moment then try again
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        type: "EXTRACT_EVENTS",
-      });
-      return response.events || [];
+        // Wait a moment then try again
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: "EXTRACT_EVENTS",
+        });
+        return response.events || [];
+      } catch (secondError) {
+        console.error("Failed to extract events:", secondError);
+        return [];
+      }
     }
   }
 
   async handleSync() {
+    // Check if we need to navigate to dashboard first
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab.url?.includes('itp.nyu.edu/camp/2025/dashboard')) {
+      // Navigate to dashboard
+      await chrome.tabs.update(tab.id!, {
+        url: 'https://itp.nyu.edu/camp/2025/dashboard'
+      });
+      
+      // Listen for tab update to refresh popup state
+      const updateListener = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+        if (tabId === tab.id && changeInfo.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(updateListener);
+          // Refresh popup state after a short delay to ensure page is loaded
+          setTimeout(() => {
+            this.loadSyncStatus();
+          }, 1000);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(updateListener);
+      return;
+    }
+
     this.hideStatus();
     this.setLoading(true);
 
@@ -178,6 +246,7 @@ class PopupController {
       }
 
       await this.loadSyncStatus();
+      await this.loadCurrentEvents();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
