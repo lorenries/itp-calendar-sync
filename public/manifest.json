@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ITP Camp Calendar Sync",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Sync RSVPed events from ITP Camp dashboard to Google Calendar",
 
   "icons": {
