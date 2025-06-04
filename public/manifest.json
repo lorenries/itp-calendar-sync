@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ITP Camp Calendar Sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sync RSVPed events from ITP Camp dashboard to Google Calendar",
 
   "icons": {
@@ -33,7 +33,7 @@
   },
 
   "oauth2": {
-    "client_id": "477189148318-iuinneelm0het1uo29aul95gdvs48h25.apps.googleusercontent.com",
+    "client_id": "153936799150-m11c3tbl33mln80dafl471naofuc0pfo.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/calendar"]
   },
 
