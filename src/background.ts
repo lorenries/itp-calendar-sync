@@ -161,6 +161,8 @@ class CalendarSync {
     }
 
     try {
+      console.log("Creating calendar event:", JSON.stringify(calendarEvent, null, 2));
+      
       const response = await fetch(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events",
         {
@@ -174,7 +176,20 @@ class CalendarSync {
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to create event: ${response.statusText}`);
+        const errorText = await response.text();
+        let errorDetails = response.statusText;
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error && errorJson.error.message) {
+            errorDetails = errorJson.error.message;
+          }
+        } catch (e) {
+          // If not JSON, use the raw text
+          errorDetails = errorText || response.statusText;
+        }
+        
+        throw new Error(`Failed to create event (${response.status}): ${errorDetails}`);
       }
 
       const result = await response.json();

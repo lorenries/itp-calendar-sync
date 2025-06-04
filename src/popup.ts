@@ -8,6 +8,7 @@ interface PopupElements {
   nyanContainer: HTMLElement;
   nyanRainbow: HTMLElement;
   nyanCat: HTMLElement;
+  signOutButton: HTMLButtonElement;
 }
 
 class PopupController {
@@ -24,6 +25,7 @@ class PopupController {
       nyanContainer: document.getElementById("nyanContainer") as HTMLElement,
       nyanRainbow: document.getElementById("nyanRainbow") as HTMLElement,
       nyanCat: document.getElementById("nyanCat") as HTMLElement,
+      signOutButton: document.getElementById("signOutButton") as HTMLButtonElement,
     };
 
     this.init();
@@ -31,6 +33,7 @@ class PopupController {
 
   init() {
     this.elements.syncButton.addEventListener("click", () => this.handleSync());
+    this.elements.signOutButton.addEventListener("click", () => this.handleLogout());
     this.loadSyncStatus();
   }
 
@@ -41,6 +44,9 @@ class PopupController {
       });
       this.elements.eventsSynced.textContent =
         response.syncedEventsCount.toString();
+
+      // Check if user has a valid token and show/hide auth status
+      await this.updateAuthStatus();
 
       // Also try to get current events from active tab
       await this.loadCurrentEvents();
@@ -143,6 +149,20 @@ class PopupController {
   updateNyanProgress() {
     this.elements.nyanRainbow.style.width = `${this.nyanProgress}px`;
     this.elements.nyanCat.style.left = `${this.nyanProgress}px`;
+  }
+
+  async updateAuthStatus() {
+    try {
+      const token = await chrome.identity.getAuthToken({ interactive: false });
+      if (token.token) {
+        this.elements.signOutButton.style.display = "block";
+      } else {
+        this.elements.signOutButton.style.display = "none";
+      }
+    } catch (error) {
+      // No token available, hide sign out button
+      this.elements.signOutButton.style.display = "none";
+    }
   }
 
   async getEventsFromActiveTab(): Promise<any[]> {
@@ -253,6 +273,46 @@ class PopupController {
       this.showStatus(`Error: ${errorMessage}`, "error");
     } finally {
       this.setLoading(false);
+    }
+  }
+
+  async handleLogout() {
+    try {
+      // Get the current token to revoke it
+      let currentToken = null;
+      try {
+        const token = await chrome.identity.getAuthToken({ interactive: false });
+        currentToken = token.token;
+      } catch (e) {
+        console.log("No current token found");
+      }
+      
+      // Revoke the token on Google's servers if we have one
+      if (currentToken) {
+        try {
+          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${currentToken}`);
+          console.log("Token revoked on Google servers");
+        } catch (e) {
+          console.log("Failed to revoke token on Google servers:", e);
+        }
+      }
+      
+      // Remove cached token locally
+      if (currentToken) {
+        await chrome.identity.removeCachedAuthToken({ token: currentToken });
+      }
+      
+      // Clear all cached tokens
+      await chrome.identity.clearAllCachedAuthTokens();
+      
+      this.showStatus("Logged out successfully", "info");
+      // Reset synced events count since auth is cleared
+      this.elements.eventsSynced.textContent = "0";
+      // Hide sign out button since user is now logged out
+      this.elements.signOutButton.style.display = "none";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      this.showStatus("Logout failed", "error");
     }
   }
 }

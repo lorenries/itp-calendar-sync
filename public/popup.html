@@ -111,6 +111,24 @@
                 color: #999;
             }
 
+            .sign-out-button {
+                margin-top: 8px;
+                font-size: 10px;
+                color: #999;
+                background: none;
+                border: none;
+                text-decoration: underline;
+                cursor: pointer;
+                padding: 0;
+                display: block;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .sign-out-button:hover {
+                color: #666;
+            }
+
             .nyan-container {
                 margin: 16px 0;
                 display: none;
@@ -187,6 +205,13 @@
 
         <div class="footer">
             <p>Visit the ITP Camp dashboard to find new events</p>
+            <button
+                id="signOutButton"
+                class="sign-out-button"
+                style="display: none"
+            >
+                Sign out
+            </button>
         </div>
 
         <script src="popup.js"></script>
