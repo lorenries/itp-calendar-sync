@@ -35,19 +35,19 @@ jobs:
       - name: Create extension zip
         run: |
           cd dist
-          zip -r ../itp-calendar-sync-extension.zip .
+          zip -r ../itp-calendar-sync-extension-${{ github.ref_name }}.zip .
           cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: itp-calendar-sync-extension.zip
+          files: itp-calendar-sync-extension-${{ github.ref_name }}.zip
           name: ${{ github.ref_name }}
           body: |
             ## Chrome Extension Release ${{ github.ref_name }}
 
             ### Installation
-            1. Download the `itp-calendar-sync-extension.zip` file
+            1. Download the `itp-calendar-sync-extension-${{ github.ref_name }}.zip` file
             2. Extract the zip file
             3. Open Chrome and go to `chrome://extensions/`
             4. Enable "Developer mode" in the top right
