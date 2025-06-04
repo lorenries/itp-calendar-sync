@@ -14,78 +14,28 @@ class CalendarSync {
     }
   }
 
-  async getTokenHash(): Promise<string> {
-    if (!this.accessToken) {
-      console.log("No access token available for hash generation");
-      throw new Error("No access token available");
-    }
-
-    try {
-      // Create a simple hash of the token for storage key
-      const encoder = new TextEncoder();
-      const data = encoder.encode(this.accessToken);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      const hash = hashHex.substring(0, 16); // Use first 16 chars
-      console.log("Generated token hash:", hash);
-      return hash;
-    } catch (error) {
-      console.error("Error generating token hash:", error);
-      throw error;
-    }
-  }
-
   async getStoredEvents(): Promise<StoredEvent[]> {
-    try {
-      console.log("Getting stored events...");
-      const tokenHash = await this.getTokenHash();
-      console.log("Using storage key:", `syncedEvents:${tokenHash}`);
-      const result = await chrome.storage.local.get(
-        `syncedEvents:${tokenHash}`,
-      );
-      console.log("Storage result:", result);
-      const events = result[`syncedEvents:${tokenHash}`] || [];
-      console.log("Found stored events:", events.length);
-      return events;
-    } catch (error) {
-      console.log("Could not get stored events, returning empty array:", error);
-      return [];
-    }
+    const result = await chrome.storage.local.get("syncedEvents");
+    return result.syncedEvents || [];
   }
 
   async saveStoredEvent(event: StoredEvent): Promise<void> {
-    try {
-      console.log("Saving stored event:", event.itpEventId);
-      const storedEvents = await this.getStoredEvents();
+    const storedEvents = await this.getStoredEvents();
 
-      // Check if event with same itpEventId already exists
-      const existingIndex = storedEvents.findIndex(
-        (e) => e.itpEventId === event.itpEventId,
-      );
+    // Check if event with same itpEventId already exists
+    const existingIndex = storedEvents.findIndex(
+      (e) => e.itpEventId === event.itpEventId,
+    );
 
-      if (existingIndex !== -1) {
-        // Update existing event instead of adding duplicate
-        storedEvents[existingIndex] = event;
-        console.log("Updated existing event");
-      } else {
-        // Add new event
-        storedEvents.push(event);
-        console.log("Added new event");
-      }
-
-      const tokenHash = await this.getTokenHash();
-      console.log("Saving to storage key:", `syncedEvents:${tokenHash}`);
-      await chrome.storage.local.set({
-        [`syncedEvents:${tokenHash}`]: storedEvents,
-      });
-      console.log("Event saved successfully");
-    } catch (error) {
-      console.error("Error saving stored event:", error);
-      throw error;
+    if (existingIndex !== -1) {
+      // Update existing event instead of adding duplicate
+      storedEvents[existingIndex] = event;
+    } else {
+      // Add new event
+      storedEvents.push(event);
     }
+
+    await chrome.storage.local.set({ syncedEvents: storedEvents });
   }
 
   parseTimeToDateTime(
@@ -211,11 +161,8 @@ class CalendarSync {
     }
 
     try {
-      console.log(
-        "Creating calendar event:",
-        JSON.stringify(calendarEvent, null, 2),
-      );
-
+      console.log("Creating calendar event:", JSON.stringify(calendarEvent, null, 2));
+      
       const response = await fetch(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events",
         {
@@ -231,7 +178,7 @@ class CalendarSync {
       if (!response.ok) {
         const errorText = await response.text();
         let errorDetails = response.statusText;
-
+        
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.error && errorJson.error.message) {
@@ -241,10 +188,8 @@ class CalendarSync {
           // If not JSON, use the raw text
           errorDetails = errorText || response.statusText;
         }
-
-        throw new Error(
-          `Failed to create event (${response.status}): ${errorDetails}`,
-        );
+        
+        throw new Error(`Failed to create event (${response.status}): ${errorDetails}`);
       }
 
       const result = await response.json();
@@ -284,9 +229,7 @@ class CalendarSync {
       }
 
       if (!response.ok) {
-        throw new Error(
-          `Failed to delete event: ${response.status} ${response.statusText}`,
-        );
+        throw new Error(`Failed to delete event: ${response.status} ${response.statusText}`);
       }
 
       return true;
@@ -299,10 +242,7 @@ class CalendarSync {
   async removeStoredEvent(eventId: string): Promise<void> {
     const storedEvents = await this.getStoredEvents();
     const filteredEvents = storedEvents.filter((e) => e.itpEventId !== eventId);
-    const tokenHash = await this.getTokenHash();
-    await chrome.storage.local.set({
-      [`syncedEvents:${tokenHash}`]: filteredEvents,
-    });
+    await chrome.storage.local.set({ syncedEvents: filteredEvents });
   }
 
   generateEventId(event: ITPEvent): string {
